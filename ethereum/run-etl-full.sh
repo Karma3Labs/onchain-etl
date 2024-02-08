@@ -12,6 +12,7 @@ EXPORT_DIR=buckets-full
 LOG_DIR=${LOG_DIR:-"/var/log/onchain-etl/ethereum"}
 LOG=${LOG_DIR}/$(basename "$0").log
 BQ_DATASET=${BQ_DATASET:-"bigquery-public-data:crypto_ethereum"}
+ENS_S3_URI=${ENS_S3_URI:-"s3://ethereum-txs/ens/ens_address.csv"}
 
 # Remove the comment below to debug
 set -x
@@ -62,6 +63,9 @@ mkdir -p ${WORK_DIR}/${EXPORT_DIR}
 mkdir -p ${WORK_DIR}/${EXPORT_DIR}-${JOBTIME}
 /usr/bin/gsutil -m cp -r "gs://${GCS_BUCKET_NAME}/*" ${WORK_DIR}/${EXPORT_DIR}-${JOBTIME}/ >> $LOG 2>&1
 
+log "Downloading ENS addresses from AWS S3"
+/usr/bin/aws s3 cp ${ENS_S3_URI} ${WORK_DIR}/${EXPORT_DIR}-${JOBTIME}/ >> $LOG 2>&1
+
 # Switch back to your current active account if it is different
 if [ $GCP_TASK_ACCT != $GCP_ACTIVE_ACCT ]; then
   echo "Setting GCS account as $GCP_TASK_ACCT"
@@ -92,6 +96,10 @@ process_db_updates() {
   done
   log "INSERT records from ${table}_new to $table"
   /usr/bin/psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "TRUNCATE TABLE $table; INSERT INTO $table SELECT * FROM ${table}_new ON CONFLICT DO NOTHING; DROP TABLE ${table}_new CASCADE;" >> $LOG 2>&1
+}
+
+retrieve_s3_buckets() {
+  /usr/bin/aws cp ${ENS_S3_URL} 
 }
 
 declare -a db_pids
