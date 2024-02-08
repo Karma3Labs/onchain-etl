@@ -1,6 +1,9 @@
 # Overview
-This is the Extract-Transform-Load (ETL) scripts to migrate a copy of the Ethereum dataset from Google's BigQuery into a local Postgres DB. The 
-process is exhaustive, involving extraction from Ethereum into CSVs exported into Google Cloud Storage (GCS) buckets, then retrieving the CSVs into your local drive to then be loaded into Postgres DB.  
+This is the Extract-Transform-Load (ETL) scripts to migrate a copy of the on-chain dataset from Google's BigQuery into a local Postgres DB. The 
+process is exhaustive, involving 
+1. extract Ethereum, Optimism and future (EVM-compatible chains) public datasets into CSV-format exported via a SQL query into Google Cloud Storage (GCS) buckets,
+2. downloading the CSVs into your local drive using Google Storage CLI, and then 
+3. inserted into a local Postgres DB
 
 # Setting up the ETL
 
@@ -14,11 +17,12 @@ The following are the necessary pre-requisites to begin.  Please go through thes
 - an installed Docker binary (you'll need a DockerHub account too)
 - a Postgres database, available via [Docker Hub](https://hub.docker.com/_/postgres)
 - enable [.pgpass](https://tableplus.com/blog/2019/09/how-to-use-pgpass-in-postgresql.html) to run Postgres CLI such as `psql` without a password challenge
-- preferably sudo capability, to setup create log folders at `/var/log/eth-etl`, adding new accounts like `postgres`, and target data folders for the database like `/var/lib/postgresql`
+- preferably sudo capability, to setup create log folders at `/var/log/onchain-etl`, adding new accounts like `postgres`, and target data folders for the database like `/var/lib/postgresql`
 
 ## Step 1 - Setup your environment
 The following is an example of the setup steps necessary to get things going
-```
+
+```sh
 # Environment setting
 DB_PASS=(your-password)
 DB_NAME=ethereum_db
@@ -51,33 +55,30 @@ postgres \
 
 ## Step 2 - Setup your local database
 Once you have Postgres up and running, run a script to create a database called `ethereum_db`.  Then populate it with the default schema that will be used as part of the ETL process.
-```
+```sh
 # Check via ipconfig to see what your Docker's internal host IP address is
 HOST=localhost
 psql -h ${HOST} -U postgres -c 'CREATE DATABASE ethereum_db;'
 ```
 
 Bootstrap the database by creating tables necessary to receive the dataset from Lens BigQuery
-```
+```sh
 psql -h ${HOST} -U postgres -f ethereum_db_schema.sql
 ```
 
 
 ## Step 3 - Review ETL scripts
-`run-etl-full.sh` - This script will perform a full export of several tables at Lens BigQuery as specified in the `sql-import-full/` 
-folder.  Each SQL script will request BigQuery to `EXPORT DATA` in a form of comma-separated values (CSVs) into Google Cloud Service (GCS) 
-in an orderly manner, based on the primary key of each table.  This will help the export process be repeatable and not run into any duplicate 
-records, as the exports are partitioned into multiple CSV files when the exports approaches on 1GB per CSV file.
+`run-etl-full.sh` - This script will perform a full export of several tables at Lens BigQuery as specified in each chain's older (e.g. `./ethereum`) folder.  Each SQL script will request BigQuery to `EXPORT DATA` in a form of comma-separated values (CSVs) into Google Cloud Service (GCS) in an orderly manner, based on the primary key of each table.  This will help the export process be repeatable and not run into any duplicate records, as the exports are partitioned into multiple CSV files when the exports approaches on 1GB per CSV file.
 
 
 ## Step 4 - Automate the ETL scripts (optional)
 Once you've successfully tested the scripts and review the data imported, you may wish to automate the script to run on a periodic basis.  Below is an 
 example of an import strategy to retrieve Lens BigQuery data on an hourly basis, and perform a full update at 2300 hours (local server time)
-```
+
+```sh
 HOME=/home/ubuntu
 # Run full import from Lens BQ at 11PM PST daily and every hour for updates
-(crontab -l 2>/dev/null; echo "0 23 * * * $HOME/eth-etl/run-etl-refresh.sh") | crontab -
-(crontab -l 2>/dev/null; echo "0 0-22 * * * $HOME/eth-etl/run-etl-update.sh") | crontab -
+(crontab -l 2>/dev/null; echo "0 23 * * * $HOME/onchain-etl/ethereum/run-etl-full.sh") | crontab -
 ```
 
 # Next Steps

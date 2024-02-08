@@ -1,17 +1,17 @@
 #!/bin/bash
-WORK_DIR=${WORK_DIR:-"/home/ubuntu/eth-etl"}; source $WORK_DIR/.env
-GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-${GCS_BUCKET_FULL:-"k3l-crypto/ethereum"}}
+WORK_DIR=${WORK_DIR:-"/home/ubuntu/onchain-etl/optimism"}; source $WORK_DIR/.env
+GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-${GCS_BUCKET_FULL:-"k3l-crypto/optimism"}}
 GCP_ACTIVE_ACCT=$(gcloud auth list|grep "*"|awk {'print $2'})
 GCP_TASK_ACCT=${GCP_TASK_ACCT:-"$(gcloud config get account --quiet)"}
 DB_HOST=${DB_HOST:-localhost}
 DB_PORT=${DB_PORT:-5432}
 DB_USER=${DB_USER:-postgres}
 DB_NAME=${DB_NAME:-postgres}
-SQL_TEMPLATE=${SQL_TEMPLATE:-"sql-import-full"}
+SQL_TEMPLATE=${SQL_TEMPLATE:-"sql-import"}
 EXPORT_DIR=buckets-full
-LOG_DIR=${LOG_DIR:-"/var/log/eth-etl"}
+LOG_DIR=${LOG_DIR:-"/var/log/onchain-etl/optimism"}
 LOG=${LOG_DIR}/$(basename "$0").log
-BQ_DATASET=${BQ_DATASET:-"bigquery-public-data:crypto_ethereum"}
+BQ_DATASET=${BQ_DATASET:-"bigquery-public-data:goog_blockchain_optimism_mainnet_us"}
 
 # Remove the comment below to debug
 set -x
