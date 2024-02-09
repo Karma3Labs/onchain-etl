@@ -3,6 +3,7 @@ WORK_DIR=${WORK_DIR:-"/home/ubuntu/onchain-etl/ethereum"}; source $WORK_DIR/.env
 GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-${GCS_BUCKET_FULL:-"k3l-crypto/ethereum"}}
 GCP_ACTIVE_ACCT=$(gcloud auth list|grep "*"|awk {'print $2'})
 GCP_TASK_ACCT=${GCP_TASK_ACCT:-"$(gcloud config get account --quiet)"}
+GCP_PROJECT_ID=${GCP_PROJECT_ID:-"k3l-crypto"}
 DB_HOST=${DB_HOST:-localhost}
 DB_PORT=${DB_PORT:-5432}
 DB_USER=${DB_USER:-postgres}
@@ -15,7 +16,7 @@ BQ_DATASET=${BQ_DATASET:-"bigquery-public-data:crypto_ethereum"}
 ENS_S3_URI=${ENS_S3_URI:-"s3://ethereum-txs/ens/ens_address.csv"}
 
 # Remove the comment below to debug
-set -x
+# set -x
 
 # Create the log directory it, this is an idempotent task
 USER=${USER:-ubuntu}
@@ -35,15 +36,15 @@ if [ $GCP_TASK_ACCT != $GCP_ACTIVE_ACCT ]; then
 fi
 
 log "Clear out Cloud Storage buckets"
-# /usr/bin/gsutil -m rm -r "gs://${GCS_BUCKET_NAME}/*" >> $LOG 2>&1
+/usr/bin/gsutil -m rm -r "gs://${GCS_BUCKET_NAME}/*" >> $LOG 2>&1
 
 declare -a pids
 
 function process_sqlfile() {
   local sqlfile=$1
   log "Running $sqlfile"
-  sed "s/GCS_BUCKET_NAME/${GCS_BUCKET_NAME}/g" $sqlfile > $sqlfile-${JOBTIME}
-  /usr/bin/bq query --nouse_cache --nouse_legacy_sql --dataset_id "${BQ_DATASET}" "$(cat $sqlfile-${JOBTIME})" >> $LOG 2>&1
+  sed "s|GCS_BUCKET_NAME|${GCS_BUCKET_NAME}|g" $sqlfile > $sqlfile-${JOBTIME}
+  /usr/bin/bq query --project_id="${GCP_PROJECT_ID}" --nouse_cache --nouse_legacy_sql --dataset_id "${BQ_DATASET}" "$(cat $sqlfile-${JOBTIME})" >> $LOG 2>&1
   rm $sqlfile-${JOBTIME}
 }
 
@@ -83,7 +84,6 @@ process_db_updates() {
   dirs+=("$dir")
   files=$(ls -1 "$dir")
 
-  # Table names in BigQuery are "public_*" while Postgres are "public.*"
   table=$(basename "$dir")
   tables+=("$table")
 

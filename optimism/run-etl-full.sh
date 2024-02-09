@@ -27,7 +27,6 @@ JOBTIME=$(date +%Y%m%d%H%M%S)
 function log() {
     echo "*******************************************************************************************************" >> $LOG
     echo "`date` - $1" >> $LOG
-    echo $1
 }
 
 # Switch to a task-related GCP account if it is different with the active account
@@ -36,7 +35,7 @@ if [ $GCP_TASK_ACCT != $GCP_ACTIVE_ACCT ]; then
 fi
 
 log "Clear out Cloud Storage buckets"
-# /usr/bin/gsutil -m rm -r "gs://${GCS_BUCKET_NAME}/*" >> $LOG 2>&1
+/usr/bin/gsutil -m rm -r "gs://${GCS_BUCKET_NAME}/*" >> $LOG 2>&1
 
 declare -a pids
 

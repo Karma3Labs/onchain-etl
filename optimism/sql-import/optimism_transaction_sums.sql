@@ -1,6 +1,6 @@
 EXPORT DATA
   OPTIONS (
-    uri = 'gs://GCS_BUCKET_NAME/transaction_sums/*.csv',
+    uri = 'gs://GCS_BUCKET_NAME/optimism_transaction_sums/*.csv',
     format = 'CSV',
     overwrite = true,
     header = true,
