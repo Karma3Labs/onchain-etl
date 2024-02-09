@@ -11,11 +11,11 @@ AS (
   trx.to_address,
 	min(trx.block_timestamp) as min_timestamp,
   max(trx.block_timestamp) as max_timestamp,
-  sum(cast(trx.gas_price as numeric)) 
+  sum(trx.gas_price.bignumeric_value)
 			as gas_price,
-	sum(cast(trx.receipt_gas_used as numeric))
+	sum(cast(trx.gas as numeric))
 			as gas_used,
-  sum(cast(trx.value as numeric)) 
+  sum(trx.value.bignumeric_value)
 			as txn_value,
 FROM transactions AS trx 
 WHERE
