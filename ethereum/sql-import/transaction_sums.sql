@@ -24,7 +24,7 @@ SELECT
 			as to_address_is_erc20,
   CASE ANY_VALUE(c2.is_erc721) WHEN ANY_VALUE(c2.is_erc721) THEN true ELSE false END 
 			as to_address_is_erc721
-FROM transactions AS trx 
+FROM `bigquery-public-data.crypto_ethereum.transactions` AS trx 
 LEFT JOIN `bigquery-public-data.crypto_ethereum.contracts` AS c1
   ON c1.address = trx.from_address
 LEFT JOIN (
