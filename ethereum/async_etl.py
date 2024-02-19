@@ -66,7 +66,7 @@ async def main(parquet_engine: str):
                 async_pool, 
                 parquet_engine, 
                 pqt_file, 
-                os.getenv("DEST_TABLENAME"))) for pqt_file in pqt_filelist[:2]]
+                os.getenv("DEST_TABLENAME"))) for pqt_file in pqt_filelist]
     await async_pool.close()
 
 
