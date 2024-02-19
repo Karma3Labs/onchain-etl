@@ -1,0 +1,16 @@
+services:
+  onchain-etl:
+    build: .
+    container_name: onchain-etl
+    image: onchain-etl:latest
+    volumes:
+      - /home/ubuntu/.config/gcloud:/root/.config/gcloud
+    restart: "no"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - on-chain-feed-network
+networks:
+  on-chain-feed-network:
+    name: on-chain-feed-network
+    external: true
