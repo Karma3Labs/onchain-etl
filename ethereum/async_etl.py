@@ -57,7 +57,7 @@ async def main(parquet_engine: str):
     pqt_filelist = fs.ls(pqt_files_path)
     logger.info(f"{len(pqt_filelist)} parquet files to process")
 
-    async_pool = await asyncpg.create_pool(os.getenv("PGSQL_URL"), 
+    async_pool = await asyncpg.create_pool(os.getenv("ASYNC_PGSQL_URL"), 
                                          min_size=1, 
                                          max_size=int(os.getenv("POSTGRES_POOL_SIZE", "2")))
     async with asyncio.TaskGroup() as task_group:
