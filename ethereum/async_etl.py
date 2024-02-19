@@ -1,52 +1,56 @@
-import logging
+import sys
 import os
-import csv
 import argparse
-from io import StringIO
-from datetime import datetime, timezone
 from dotenv import load_dotenv, find_dotenv
 from pathlib import Path
 import asyncio
+import time
 
 import utils
-from timer import Timer
 
-import pandas as pd
+import pandas 
 import gcsfs
 import asyncpg
+from loguru import logger
 
+logger.remove()
+level_per_module = {
+    "": "INFO",
+    "app": os.getenv("LOG_LEVEL", "INFO"),
+    "silentlib": False
+}
+logger.add(sys.stdout, 
+           colorize=True, 
+           format="<green>{time}</green> | {module}:{file}:{function}:{line} | {level} | <level>{message}</level>",
+           filter=level_per_module,
+           level=0)
 
 async def process_parquet(
-        logger: logging.Logger, 
         async_pool,
         parquet_engine: str, 
         pq_filepath: str, 
         dest_tablename: str
 ):
     logger.info(f"reading parquet file: {pq_filepath}")
-    logger.info(f"parquet engine: {parquet_engine}")
-
-    t = Timer(name=f"read_{pq_filepath}")
-    t.start()
-    df = pd.read_parquet(f"gs://{pq_filepath}", engine=parquet_engine)
-    t.stop()
+    start_time = time.perf_counter()
+    df = pandas.read_parquet(f"gs://{pq_filepath}", engine=parquet_engine)
+    logger.info(f"gcs: {pq_filepath} took {time.perf_counter() - start_time} secs")
 
     logger.debug(utils.df_info_to_string(df))
     logger.info(f"{pq_filepath} has {len(df)} rows")
 
-    t = Timer(name=f"to_sql_{pq_filepath}")
-    t.start()
     logger.info(f"destination table : {dest_tablename}")
     async with async_pool.acquire() as conn:
         async with conn.transaction():
+            start_time = time.perf_counter()
             await conn.copy_records_to_table(
                                 dest_tablename, 
                                 records=df.itertuples(index=False), 
                                 columns=df.columns.to_list(), 
                                 timeout=300)
-    t.stop()
+            logger.info(f"database: {pq_filepath} took {time.perf_counter() - start_time} secs")
 
-async def main(logger: logging.Logger, parquet_engine: str):
+async def main(parquet_engine: str):
     pqt_files_path = f"{os.getenv("GCS_BUCKET")}/{os.getenv("BLOB_PATH")}"
     logger.info(f"listing parquet files at {pqt_files_path}")
     fs = gcsfs.GCSFileSystem(project=os.getenv("GCS_PROJECT_ID"))
@@ -55,17 +59,19 @@ async def main(logger: logging.Logger, parquet_engine: str):
 
     async_pool = await asyncpg.create_pool(os.getenv("PGSQL_URL"), 
                                          min_size=1, 
-                                         max_size=os.getenv("POSTGRES_POOL_SIZE", 1))
-    await process_parquet(logger, async_pool, parquet_engine, pqt_filelist[0], os.getenv("DEST_TABLENAME"))
+                                         max_size=int(os.getenv("POSTGRES_POOL_SIZE", "2")))
+    async with asyncio.TaskGroup() as task_group:
+        [task_group.create_task(
+            process_parquet(
+                async_pool, 
+                parquet_engine, 
+                pqt_file, 
+                os.getenv("DEST_TABLENAME"))) for pqt_file in pqt_filelist[:2]]
     await async_pool.close()
 
 
 if __name__ == '__main__':
-    logger = logging.getLogger()
-    utils.setup_consolelogger(logger=logger)
-
-    logging.getLogger().setLevel(logging.INFO)
-    logging.info(f"Starting ETL at {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')}") 
+    logger.info(f"Starting ETL") 
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--engine",
@@ -78,7 +84,7 @@ if __name__ == '__main__':
 
 
     args = parser.parse_args()
-    logging.info(f"args: {args}")
+    logger.info(f"args: {args}")
 
     if not args.config:
         dotenvfile = find_dotenv(usecwd=True)
@@ -86,6 +92,6 @@ if __name__ == '__main__':
         dotenvfile = args.config
     load_dotenv(dotenvfile)
 
-    asyncio.run(main(logger, args.engine)) 
+    asyncio.run(main(args.engine)) 
     
-    logging.info(f"Finished ETL at {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')}") 
+    logger.info(f"Finished ETL") 
