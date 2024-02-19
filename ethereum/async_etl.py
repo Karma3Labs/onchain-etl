@@ -41,14 +41,13 @@ async def process_parquet(
 
     logger.info(f"destination table : {dest_tablename}")
     async with async_pool.acquire() as conn:
-        async with conn.transaction():
-            start_time = time.perf_counter()
-            await conn.copy_records_to_table(
-                                dest_tablename, 
-                                records=df.itertuples(index=False), 
-                                columns=df.columns.to_list(), 
-                                timeout=300)
-            logger.info(f"database: {pq_filepath} took {time.perf_counter() - start_time} secs")
+        start_time = time.perf_counter()
+        await conn.copy_records_to_table(
+                            dest_tablename, 
+                            records=df.itertuples(index=False), 
+                            columns=df.columns.to_list(), 
+                            timeout=300)
+        logger.info(f"database: {pq_filepath} took {time.perf_counter() - start_time} secs")
 
 async def main(parquet_engine: str):
     pqt_files_path = f"{os.getenv("GCS_BUCKET")}/{os.getenv("BLOB_PATH")}"
@@ -66,7 +65,7 @@ async def main(parquet_engine: str):
                 async_pool, 
                 parquet_engine, 
                 pqt_file, 
-                os.getenv("DEST_TABLENAME"))) for pqt_file in pqt_filelist]
+                os.getenv("DEST_TABLENAME"))) for pqt_file in pqt_filelist[:10]]
     await async_pool.close()
 
 
