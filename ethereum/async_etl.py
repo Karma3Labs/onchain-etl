@@ -26,22 +26,24 @@ logger.add(sys.stdout,
            level=0)
 
 async def process_parquet(
-        async_pool,
+        semaphore,
+        pgsql_url,
         parquet_engine: str, 
         pq_filepath: str, 
         dest_tablename: str
 ):
-    logger.info(f"reading parquet file: {pq_filepath}")
-    start_time = time.perf_counter()
-    df = pandas.read_parquet(f"gs://{pq_filepath}", engine=parquet_engine)
-    logger.info(f"gcs: {pq_filepath} took {time.perf_counter() - start_time} secs")
-
-    logger.debug(utils.df_info_to_string(df))
-    logger.info(f"{pq_filepath} has {len(df)} rows")
-
-    logger.info(f"destination table : {dest_tablename}")
-    async with async_pool.acquire() as conn:
+    async with semaphore:
+        logger.info(f"reading parquet file: {pq_filepath}")
         start_time = time.perf_counter()
+        df = pandas.read_parquet(f"gs://{pq_filepath}", engine=parquet_engine)
+        logger.info(f"gcs: {pq_filepath} took {time.perf_counter() - start_time} secs")
+
+        logger.debug(utils.df_info_to_string(df))
+        logger.info(f"{pq_filepath} has {len(df)} rows")
+
+        logger.info(f"destination table : {dest_tablename}")
+        start_time = time.perf_counter()
+        conn = await asyncpg.connect(pgsql_url)
         await conn.copy_records_to_table(
                             dest_tablename, 
                             records=df.itertuples(index=False), 
@@ -56,17 +58,18 @@ async def main(parquet_engine: str):
     pqt_filelist = fs.ls(pqt_files_path)
     logger.info(f"{len(pqt_filelist)} parquet files to process")
 
-    async_pool = await asyncpg.create_pool(os.getenv("ASYNC_PGSQL_URL"), 
-                                         min_size=1, 
-                                         max_size=int(os.getenv("POSTGRES_POOL_SIZE", "2")))
+    sema = asyncio.Semaphore(value=int(os.getenv("POSTGRES_POOL_SIZE", "3")))
+    pgsql_url = os.getenv("ASYNC_PGSQL_URL")
+    dest_tablename = os.getenv("DEST_TABLENAME")
     async with asyncio.TaskGroup() as task_group:
         [task_group.create_task(
             process_parquet(
-                async_pool, 
+                sema,
+                pgsql_url, 
                 parquet_engine, 
                 pqt_file, 
-                os.getenv("DEST_TABLENAME"))) for pqt_file in pqt_filelist[:10]]
-    await async_pool.close()
+                dest_tablename)) for pqt_file in pqt_filelist]
+    
 
 
 if __name__ == '__main__':
