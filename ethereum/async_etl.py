@@ -43,6 +43,8 @@ async def process_parquet(
 
         logger.info(f"destination table : {dest_tablename}")
         start_time = time.perf_counter()
+        # not using connection pool because db insert is slow and
+        # controlling with semaphore avoids accumulation of dataframes in memory
         conn = await asyncpg.connect(pgsql_url)
         await conn.copy_records_to_table(
                             dest_tablename, 
