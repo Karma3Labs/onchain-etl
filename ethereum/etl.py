@@ -79,7 +79,7 @@ def main(logger: logging.Logger, parquet_engine: str):
     pqt_filelist = fs.ls(pqt_files_path)
     logger.info(f"{len(pqt_filelist)} parquet files to process")
     sql_engine = create_engine(os.getenv("PGSQL_URL"))
-    for pqt_file in pqt_filelist[:1]:
+    for pqt_file in pqt_filelist:
         process_parquet(logger, sql_engine, parquet_engine, pqt_file, os.getenv("DEST_TABLENAME"))
 
 

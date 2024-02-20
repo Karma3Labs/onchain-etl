@@ -12,5 +12,5 @@ COPY .env.docker ./.env
 
 ENV GOOGLE_APPLICATION_CREDENTIALS=./.gcp_service_account_key.json
 
-
-CMD ["python3", "async_etl.py"]
+# CMD ["python3", "async_etl.py"]
+CMD ["python3", "etl.py"]
