@@ -41,8 +41,8 @@ CREATE TABLE public.base_transactions_sums (
     max_timestamp timestamp without time zone NOT NULL,
     min_timestamp timestamp without time zone NOT NULL,
     to_address character varying(42),
-    total_gas_paid bigint NOT NULL,
-    txn_value numeric NOT NULL,
+    total_gas_value bigint NOT NULL,
+    total_txn_value numeric NOT NULL,
     txn_count numeric NOT NULL,
     to_address_is_contract boolean NOT NULL,
     to_address_is_erc20 boolean NOT NULL,
@@ -596,52 +596,23 @@ ALTER TABLE public.optimism_addresses_with_token_standards OWNER TO postgres;
 --
 
 CREATE MATERIALIZED VIEW public.k3l_address_labels AS
- SELECT row_number() OVER () AS pseudo_id,
-        CASE COALESCE(eth.token_standard, base.token_standard, op.token_standard, 'NOT_TOKEN'::character varying)
-            WHEN 'NOT_TOKEN'::text THEN non_eoa.category
-            ELSE COALESCE(eth.token_standard, base.token_standard, op.token_standard)
-        END AS category,
-        CASE
-            WHEN (base.token_standard IS NOT NULL) THEN 'base'::character varying
-            WHEN (op.token_standard IS NOT NULL) THEN 'optimism'::character varying
-            WHEN (eth.token_standard IS NOT NULL) THEN 'ethereum'::character varying
-            ELSE dune_labels.blockchain
-        END AS blockchain,
-    non_eoa.address,
-    non_eoa.label_type,
-    non_eoa.model_name,
-    dune_labels.name
-   FROM ((((public.eth_base_op_non_eoa_address_labels non_eoa
-     LEFT JOIN public.dune_labels ON (((dune_labels.address)::text = (non_eoa.address)::text)))
-     LEFT JOIN public.base_addresses_with_token_standards base ON (((non_eoa.address)::text = (base.contract_address)::text)))
-     LEFT JOIN public.optimism_addresses_with_token_standards op ON (((non_eoa.address)::text = (op.contract_address)::text)))
-     LEFT JOIN public.ethereum_addresses_with_token_standards eth ON (((non_eoa.address)::text = (eth.contract_address)::text)))
-  WITH NO DATA;
-
-
-ALTER MATERIALIZED VIEW public.k3l_address_labels OWNER TO postgres;
-
---
--- Name: k3l_address_labels_deduped; Type: MATERIALIZED VIEW; Schema: public; Owner: postgres
---
-
-CREATE MATERIALIZED VIEW public.k3l_address_labels_deduped AS
  WITH labels AS (
          SELECT
                 CASE
-                    WHEN (((COALESCE(eth.token_standard, base.token_standard, op.token_standard, 'NOT_TOKEN'::character varying))::text = 'NOT_TOKEN'::text) AND ((non_eoa.category)::text <> 'contracts'::text)) THEN false
-                    ELSE true
+                    WHEN (((COALESCE(eth.token_standard, base.token_standard, op.token_standard, 'NOT_TOKEN'::character varying))::text <> 'NOT_TOKEN'::text) AND (((non_eoa.category)::text = 'contracts'::text) OR ((non_eoa.model_name)::text = 'stablecoins'::text))) THEN true
+                    ELSE false
                 END AS is_token,
-                CASE COALESCE(eth.token_standard, base.token_standard, op.token_standard, 'NOT_TOKEN'::character varying)
-                    WHEN 'NOT_TOKEN'::text THEN non_eoa.category
-                    ELSE COALESCE(eth.token_standard, base.token_standard, op.token_standard)
+                CASE
+                    WHEN (((COALESCE(eth.token_standard, base.token_standard, op.token_standard, 'NOT_TOKEN'::character varying))::text <> 'NOT_TOKEN'::text) AND (((non_eoa.category)::text = 'contracts'::text) OR ((non_eoa.model_name)::text = 'stablecoins'::text))) THEN COALESCE(eth.token_standard, base.token_standard, op.token_standard, non_eoa.category)
+                    ELSE non_eoa.category
                 END AS category,
                 CASE
                     WHEN (base.token_standard IS NOT NULL) THEN 'base'::character varying
                     WHEN (op.token_standard IS NOT NULL) THEN 'optimism'::character varying
                     WHEN (eth.token_standard IS NOT NULL) THEN 'ethereum'::character varying
                     ELSE dune_labels.blockchain
-                END AS blockchain,
+                END AS new_blockchain,
+            dune_labels.blockchain,
             non_eoa.address,
             non_eoa.label_type,
             non_eoa.model_name,
@@ -652,19 +623,26 @@ CREATE MATERIALIZED VIEW public.k3l_address_labels_deduped AS
              LEFT JOIN public.optimism_addresses_with_token_standards op ON (((non_eoa.address)::text = (op.contract_address)::text)))
              LEFT JOIN public.ethereum_addresses_with_token_standards eth ON (((non_eoa.address)::text = (eth.contract_address)::text)))
         )
- SELECT labels.address,
-    bool_or(labels.is_token) AS is_token,
-    (array_agg(labels.category))[1] AS category,
-    (array_agg(labels.label_type))[1] AS label_type,
-    (array_agg(labels.model_name))[1] AS model_name,
-    (array_agg(labels.name))[1] AS name,
-    (array_agg(labels.blockchain))[1] AS blockchain
+ SELECT row_number() OVER () AS pseudo_id,
+    labels.address,
+    labels.blockchain,
+    bool_and(labels.is_token) AS is_token,
+    (array_agg(labels.category ORDER BY labels.is_token))[1] AS category,
+    (array_agg(labels.label_type ORDER BY labels.is_token))[1] AS label_type,
+    (array_agg(labels.model_name ORDER BY
+        CASE
+            WHEN ((labels.category)::text = 'dex'::text) THEN 1
+            WHEN ((labels.model_name)::text = 'stablecoins'::text) THEN 2
+            WHEN labels.is_token THEN 3
+            ELSE 4
+        END))[1] AS model_name,
+    (array_agg(labels.name ORDER BY labels.is_token))[1] AS name
    FROM labels
-  GROUP BY labels.address
+  GROUP BY labels.address, labels.blockchain
   WITH NO DATA;
 
 
-ALTER MATERIALIZED VIEW public.k3l_address_labels_deduped OWNER TO postgres;
+ALTER MATERIALIZED VIEW public.k3l_address_labels OWNER TO postgres;
 
 --
 -- Name: labeled_addresses; Type: TABLE; Schema: public; Owner: postgres
@@ -1122,13 +1100,6 @@ CREATE INDEX idx_hash ON public.deprecated_blocks USING btree (hash);
 --
 
 CREATE INDEX idx_k3l_address_labels_address_hash ON public.k3l_address_labels USING hash (address);
-
-
---
--- Name: idx_k3l_address_labels_deduped_address_hash; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX idx_k3l_address_labels_deduped_address_hash ON public.k3l_address_labels_deduped USING hash (address);
 
 
 --
