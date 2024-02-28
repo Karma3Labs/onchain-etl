@@ -18,3 +18,6 @@ WHERE
 			BETWEEN TIMESTAMP("2023-01-01") AND TIMESTAMP("2024-02-18")
   AND trx.from_address != trx.to_address
 GROUP BY trx.from_address, trx.to_address
+
+-- Successfully exported 37707749 rows into 260 files.
+-- 2024-02-28 02:43:23.847250 UTC
