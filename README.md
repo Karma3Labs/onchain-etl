@@ -67,24 +67,19 @@ psql -h ${HOST} -U postgres -f ethereum_db_schema.sql
 ```
 
 
-## Step 3 - Review ETL scripts
-`run-etl-full.sh` - This script will perform a full export of several tables at Lens BigQuery as specified in each chain's older (e.g. `./ethereum`) folder.  Each SQL script will request BigQuery to `EXPORT DATA` in a form of comma-separated values (CSVs) into Google Cloud Service (GCS) in an orderly manner, based on the primary key of each table.  This will help the export process be repeatable and not run into any duplicate records, as the exports are partitioned into multiple CSV files when the exports approaches on 1GB per CSV file.
+## Step 3 - Export from BigQuery to Cloud Storage
+`bq_to_pg/sql-export` - This folder has scripts that can be run from BigQuery console or using `bq` cli tool. If using BigQuery console, copy the scripts into separate query tabs and run them one by one. Running these scripts will export data from BigQuery to a bucket in GCS in parquet format.
 
-
-## Step 4 - Automate the ETL scripts (optional)
-Once you've successfully tested the scripts and review the data imported, you may wish to automate the script to run on a periodic basis.  Below is an 
-example of an import strategy to retrieve Lens BigQuery data on an hourly basis, and perform a full update at 2300 hours (local server time)
-
-```sh
-HOME=/home/ubuntu
-# Run full import from Lens BQ at 11PM PST daily and every hour for updates
-(crontab -l 2>/dev/null; echo "0 23 * * * $HOME/onchain-etl/ethereum/run-etl-full.sh") | crontab -
+## Step 4 - Import from Cloud Storage into Postgres
+The import script is run inside a docker container that encapsulates all the dependencies required by the script. Make sure to create a `.env.docker` file and edit the postgres database details.
+```
+cd bq_to_pg
+cp .env.sample .env.docker
+vi env.docker
+docker-compose -f docker-compose.yml build
+docker-compose -f docker-compose.yml up -d
 ```
 
 # Next Steps
-These ETL scripts can be repurposed for other BigQuery datasets that developers may need in order to run computation which regularly queries 
-the database.  Running a local copy will avoid the cloud transfer latencies and the cost of running on BigQuery.  Feel free to fork this script 
-or improve upon it by submitting a pull request.
-
 If there are any questions, reach out to us on [Discord](https://k3l.io/discord) or [Telegram](https://t.me/Karma3Labs), and follow us on [Twitter](https://twitter.com/Karma3Labs).
 
