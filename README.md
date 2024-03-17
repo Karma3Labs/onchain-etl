@@ -63,7 +63,7 @@ psql -h ${HOST} -U postgres -c 'CREATE DATABASE ethereum_db;'
 
 Bootstrap the database by creating tables necessary to receive the dataset from Lens BigQuery
 ```sh
-psql -h ${HOST} -U postgres -f ethereum_db_schema.sql
+psql -h ${HOST} -U postgres -f onchain_db_schema.sql
 ```
 
 
